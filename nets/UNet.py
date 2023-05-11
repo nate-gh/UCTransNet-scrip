@@ -2,8 +2,9 @@ import torch.nn as nn
 import torch
 
 def get_activation(activation_type):
-    activation_type = activation_type.lower()
+    activation_type = activation_type.lower()  # 装换成小写
     if hasattr(nn, activation_type):
+        # 如果torch具有该属性，使用 getattr() 获取该属性对应的激活函数，并返回。
         return getattr(nn, activation_type)()
     else:
         return nn.ReLU()
@@ -27,8 +28,8 @@ class ConvBatchNorm(nn.Module):
         self.activation = get_activation(activation)
 
     def forward(self, x):
-        out = self.conv(x)
-        out = self.norm(out)
+        out = self.conv(x)      # 3*3卷积
+        out = self.norm(out)    # 标准化
         return self.activation(out)
 
 class DownBlock(nn.Module):
@@ -36,6 +37,9 @@ class DownBlock(nn.Module):
 
     def __init__(self, in_channels, out_channels, nb_Conv, activation='ReLU'):
         super(DownBlock, self).__init__()
+        # 二维最大池化层，它的作用是对输入的二维张量进行下采样操作，将其尺寸缩小一半。
+        # 具体来说，它会将输入张量中每个大小为 (2, 2) 的非重叠区域中的最大值保留下来，生成一个尺寸减半的输出张量。
+        # 参数 2 表示池化窗口大小，即每个池化区域的高度和宽度都为 2。这意味着池化区域之间没有重叠部分。如果希望池化区域之间有重叠部分，可以通过设置 stride 参数实现。
         self.maxpool = nn.MaxPool2d(2)
         self.nConvs = _make_nConv(in_channels, out_channels, nb_Conv, activation)
 
@@ -50,12 +54,15 @@ class UpBlock(nn.Module):
         super(UpBlock, self).__init__()
 
         # self.up = nn.Upsample(scale_factor=2)
+        # 定义上采样层，使用 nn.ConvTranspose2d 实现，将输入张量的通道数减半，输出张量的空间维度扩大两倍。
         self.up = nn.ConvTranspose2d(in_channels//2,in_channels//2,(2,2),2)
         self.nConvs = _make_nConv(in_channels, out_channels, nb_Conv, activation)
 
     def forward(self, x, skip_x):
         out = self.up(x)
+        # 将上采样后的张量 out 和 skip_x 进行通道维度的拼接，其中 skip_x 是跳跃连接的张量。
         x = torch.cat([out, skip_x], dim=1)  # dim 1 is the channel dimension
+        # 将拼接后的张量 x 传入 self.nConvs 进行多层卷积操作，并将结果返回。
         return self.nConvs(x)
 
 class UNet(nn.Module):
@@ -72,10 +79,11 @@ class UNet(nn.Module):
         # Question here
         in_channels = 64
         self.inc = ConvBatchNorm(n_channels, in_channels)
+        # 通道x2，两次卷积
         self.down1 = DownBlock(in_channels, in_channels*2, nb_Conv=2)
         self.down2 = DownBlock(in_channels*2, in_channels*4, nb_Conv=2)
         self.down3 = DownBlock(in_channels*4, in_channels*8, nb_Conv=2)
-        self.down4 = DownBlock(in_channels*8, in_channels*8, nb_Conv=2)
+        self.down4 = DownBlock(in_channels*8, in_channels*8, nb_Conv=2) # 通道不变，两次卷积
         self.up4 = UpBlock(in_channels*16, in_channels*4, nb_Conv=2)
         self.up3 = UpBlock(in_channels*8, in_channels*2, nb_Conv=2)
         self.up2 = UpBlock(in_channels*4, in_channels, nb_Conv=2)
